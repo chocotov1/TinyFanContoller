@@ -2,7 +2,7 @@
 
 ATtiny85 based fan controller I built into a small USB powered desk fan.
 
-## Features or my project build
+## Features of my project build
 - added speed control per potentiometer
 - added JST PH lipo battery connector to fan, crimped JST connector onto original USB cable
 - voltage dependent lowest speed control (stalled motor prevention)
@@ -28,7 +28,7 @@ To make the hack as simple as possible I first tried only using a BJT with a pot
 
 ## MCU version: PWM whine
 
-The first attempt with a PWM signal from the ATtiny created a audible whine. This was using the regular 500 Hz PWM signal of the ATtiny / Arduino.
+The first attempt with a PWM signal from the ATtiny produced an audible whine. This was using the regular 500 Hz PWM signal of the ATtiny / Arduino.
 
 After I changed to a higher frequency PWM (32 KHz), the whine was gone. This came at the expense of not being able to use delay() and millis() anymore.
 
@@ -39,3 +39,12 @@ In my other project [DHT11Tiny](https://github.com/chocotov1/DHT11Tiny) I first 
 Some more hints can be found here:
 
 https://www.electroschematics.com/14089/attiny85-pwm-primer-tutorial-using-arduino/
+
+## Project build images
+
+<img src="https://raw.githubusercontent.com/chocotov1/TinyFanController/master/media/TinyFanController_build_010.jpg" width=640>
+<img src="https://raw.githubusercontent.com/chocotov1/TinyFanController/master/media/TinyFanController_build_020.jpg" width=640>
+<img src="https://raw.githubusercontent.com/chocotov1/TinyFanController/master/media/TinyFanController_build_030.jpg" width=640>
+<img src="https://raw.githubusercontent.com/chocotov1/TinyFanController/master/media/TinyFanController_build_040.jpg" width=640>
+<img src="https://raw.githubusercontent.com/chocotov1/TinyFanController/master/media/TinyFanController_build_050.jpg" width=640>
+<img src="https://raw.githubusercontent.com/chocotov1/TinyFanController/master/media/TinyFanController_build_060.jpg" width=640>
