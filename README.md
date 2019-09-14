@@ -1,6 +1,6 @@
 # TinyFanController
 
-ATtiny85 based fan controller I built into a small USB powered desk fan.
+ATtiny85 based fan controller I built into a small USB powered desk fan. Uses [ATTinyCore](https://github.com/SpenceKonde/ATTinyCore).
 
 ## Features of my project build
 - added speed control per potentiometer
