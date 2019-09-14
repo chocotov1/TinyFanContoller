@@ -9,7 +9,7 @@ ATtiny85 based fan controller I built into a small USB powered desk fan.
 - burst start (stalled motor prevention)
 - timer shuts off fan after a while
 - push button resets timer / starts fan
-- low voltage start prevention
+- low voltage protection / start prevention
 
 ## Fan motor
 
