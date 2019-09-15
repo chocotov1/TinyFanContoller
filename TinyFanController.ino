@@ -2,10 +2,11 @@
 #include <avr/power.h>
 #include <avr/wdt.h>
 
-byte     speed_input_pin    = A2;
-byte     pwm_output_pin     = 1;
-bool     fan_running        = false;
-uint16_t stop_motor_counter = 100;
+byte     analogread_power_pin = 2;
+byte     speed_input_pin      = A2;
+byte     pwm_output_pin       = 1;
+bool     fan_running          = false;
+uint16_t stop_motor_counter   = 100;
 
 #include <util/delay.h>    // Adds delay_ms and delay_us functions
 
@@ -36,6 +37,7 @@ void setup(){
                // give VCC a moment to stabilize
   check_vcc(); // prenimilary reading, first reading seems to be lower than expected
 
+  pinMode(analogread_power_pin, INPUT);
   pinMode(speed_input_pin, INPUT);
   pinMode(button_pin, INPUT_PULLUP);
   GIMSK = 1<<PCIE;       // pin change interrupt
@@ -169,8 +171,16 @@ void set_fan_speed(){
   
   byte lower_limit = map(vcc_mv, 3000, 5000, 220, 240);
   lower_limit = constrain(lower_limit, 220, 250); // don't exceed lower boundry of 250
+
+  pinMode(analogread_power_pin, OUTPUT);
+  digitalWrite(analogread_power_pin, HIGH);
+
+  // after potentiometer was connected to pin intead of vcc, the output voltage doesn't reach the upper boundry anymore: changed 1023 into 1020. Max speed is still possible.
+  int16_t fan_speed = map(analogRead(speed_input_pin), 0, 1020, lower_limit, 0);
+  fan_speed = constrain(fan_speed, 0, 255);
+
+  pinMode(analogread_power_pin, INPUT); // high impedance-state
   
-  byte fan_speed = map(analogRead(speed_input_pin), 0, 1023, lower_limit, 0);
   analogWrite(pwm_output_pin, fan_speed);
 }
 
