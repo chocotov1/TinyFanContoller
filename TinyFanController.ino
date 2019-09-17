@@ -6,9 +6,7 @@ byte     analogread_power_pin = 2;
 byte     speed_input_pin      = A2;
 byte     pwm_output_pin       = 1;
 bool     fan_running          = false;
-uint16_t stop_motor_counter   = 100;
-
-#include <util/delay.h>    // Adds delay_ms and delay_us functions
+uint32_t fan_stop_time;
 
 uint16_t vcc_mv;
 
@@ -43,17 +41,41 @@ void setup(){
   GIMSK = 1<<PCIE;       // pin change interrupt
   PCMSK = 1<<button_pin; // pin change interrupt
 
-  // standard pwm frequency of 500 hz causes audible whine, most noticable at lower speed
-  // increase pwm frequency: 
-  // https://www.electroschematics.com/14089/attiny85-pwm-primer-tutorial-using-arduino/
-  // 1 mhz: 4 khz: still noisy
-  // 8 mhz: 32 khz: silent, but needs much higher duty cycle
-  //TCCR0B = TCCR0B & 0b11111001; // this actually doesn't work...
-  // this works:
-  TCCR0B = TCCR0B & 0b11111000 | 0b001;
+  // external 64 mhz timer clock: only tested it
+  // needs to be turned on again after sleep
+  //PLLCSR = 1<<PCKE | 1<<PLLE; 
+  //PLLCSR |= 1<<LSM;               // low speed mode: 32 mhz
+  //while(!(PLLCSR & (1<<PLOCK)));  // wait for stable PLL clock
 
-  // https://www.re-innovation.co.uk/docs/fast-pwm-on-attiny85/
-  // delay isn't accurate anymore after changing TCCROB, use _delay_ms() included in delay.h instead
+  // custom 25 kHz PWM at 1 MHz system clock:
+  // datasheet chapters:
+  // 12.2 Counter and Compare Units
+  // 12.3.1 TCCR1 – Timer/Counter1 Control Register
+  TCCR1 &= 0xF0;                    // turn off timer clock / reset all prescaler bits (some are set by default)
+  //TCCR1 |= (1<<CS12) | (1<<CS11); // prescaler: 32
+  //TCCR1 |= (1<<CS12) | (1<<CS10); // prescaler: 16
+  //TCCR1 |= (1<<CS12);             // prescaler: 8
+  TCCR1 |= (1<<CS10);               // no prescaler
+
+  //12.3.1 TCCR1 – Timer/Counter1 Control Register
+  // Table 12-1. Compare Mode Select in PWM Mode
+  // 
+  //TCCR1 |= (1<<COM1A1);             // OC1x cleared on compare match. Set when TCNT1 = $00. Inverted OC1x not connected.
+  // high and low time inverted:
+  //TCCR1 |= (1<<COM1A1) | (1<<COM1A0); // OC1x Set on compare match. Cleared when TCNT1= $00.  Inverted OC1x not connected.
+  // TCCR1 is set in start_fan()
+
+  // this is how far the counter goes before it starts over again (255 max):
+  OCR1C = 40;
+
+  // example PWM values:
+  // frequency: timer clock source (1 MHz) / prescaler (1) / OCR1C (40): 25000 Hz
+  // duty cycle:
+  // OCR1A = 20; // (50% of OCR1C)
+  //
+  // Notice that in this example each step (1..40) means a difference of 2.5%: The resolution is not so fine. 
+
+  // OCR1A is set dynamicly in set_fan_speed()
 }
 
 void check_vcc() {
@@ -71,9 +93,7 @@ void check_vcc() {
     ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
   #endif  
  
-  //delay(2); // Wait for Vref to settle
-  // delay() doesn't work with changed timers.. (tccr0b: 32 khz pwm), got wrong measurements (too low) under certain circumstances..
-  _delay_ms(2);
+  delay(2); // Wait for Vref to settle
   
   //sleep_1_sec();
   ADCSRA |= _BV(ADSC); // Start conversion
@@ -95,11 +115,18 @@ void check_vcc() {
   //  3.3 | 1.1      | 341
   //  4.4 | 1.1      | 255
 
-  // my alternative using map also works
-  // no sketch size penalty!
-  // this way it's easy to adjust the measured reference (1100) voltage for more accuracy
-  //uint16_t vcc_mv = map(1023,0,ADC,0,1100);
-  vcc_mv = map(1023,0,ADC,0,1072); // 1072 measured at 3.05 V
+  // novelty vcc calculation using map instead of 1125300L / ADC, no sketch size penalty!
+  // this way it's easy to adjust the measured reference 1100 voltage (1100) for more accuracy
+  vcc_mv = map(1023,0,ADC,0,1100);
+  //
+  // I noticed the internal reference sinks when vcc rises, for example 950 mV at 5 V
+  //
+  // vcc much higher then the calibated reference voltage are exaggerated and could be roughly compensated like this:
+  //
+  // if (vcc_mv > 3800){
+  //    // example: 3800 is known to be accurate, 5200 was measured as 5700
+  //    vcc_mv = map(vcc_mv,3800,5700,3800,5200);
+  // }
 }
 
 void go_to_sleep_forever(){
@@ -137,89 +164,92 @@ bool start_fan(){
       return false;
    }
 
-   // the counter increases about 6.25 times per second when the fan runs
-   // 5 minutes: 300 * 6.25 = 1875
-   stop_motor_counter = 1875;
-   
-   if (vcc_mv > 4500){
-      stop_motor_counter *= 2; // double the running time when probably on usb power
-   }
+   reset_running_time();
 
-   // start up sequence
-   // full power first second
+   // PWM mode OC1A: inverted duty cycle
+   TCCR1 |= (1<<COM1A1) | (1<<COM1A0); // OC1x Set on compare match. Cleared when TCNT1= $00.  Inverted OC1x not connected.
 
+   // start up sequence: full power first second
    // especially at lower VCC high duty cycle pulsating seems to start up the motor more successfully
-   analogWrite(pwm_output_pin, 60); // PNP: inversed duty cycle 
-   _delay_ms(1000);
-   digitalWrite(pwm_output_pin, LOW);
+
+   //  90% duty cycle
+   OCR1A = OCR1C * 0.9;
+
+   delay(1000);
    fan_running = true;
    return true;
 }
 
 bool stop_fan(){
+   // turn off PWM mode OC1A:
+   TCCR1 &= ~(1<<COM1A1 | 1<<COM1A0);
+
    digitalWrite(pwm_output_pin, HIGH);
    fan_running = false;
+   delay(2);
    go_to_sleep_forever();
 }
 
 void set_fan_speed(){
   // determine the lowest possible duty cycle / fan speed. The fan should still be able to spin.
   // allow a lower duty cycle when vcc is higher
-  // because of PNP setup, the duty cycle is inversed. Lower limits:
-  // 5 V: 240
-  // 3 V: 220
-  
-  byte lower_limit = map(vcc_mv, 3000, 5000, 220, 240);
-  lower_limit = constrain(lower_limit, 220, 250); // don't exceed lower boundry of 250
+
+  byte lower_limit_percentage = map(vcc_mv, 3000, 5000, 18, 8); // 18% at 3 V, 8% at 5 V
+  lower_limit_percentage      = constrain(lower_limit_percentage, 8, 18); // don't exceed boundries
 
   pinMode(analogread_power_pin, OUTPUT);
   digitalWrite(analogread_power_pin, HIGH);
 
-  // after potentiometer was connected to pin intead of vcc, the output voltage doesn't reach the upper boundry anymore: changed 1023 into 1020. Max speed is still possible.
-  int16_t fan_speed = map(analogRead(speed_input_pin), 0, 1020, lower_limit, 0);
-  fan_speed = constrain(fan_speed, 0, 255);
+  // after potentiometer was connected to pin intead of vcc, the voltage reading didn't reach the upper limit anymore (breadboard might have made things worse)
+  // change 1020 into 1023. Max speed is still possible.
+  uint16_t analog_read_fanspeed = analogRead(speed_input_pin);
+  if (analog_read_fanspeed >= 1020){
+     analog_read_fanspeed = 1023;
+  }
 
   pinMode(analogread_power_pin, INPUT); // high impedance-state
-  
-  analogWrite(pwm_output_pin, fan_speed);
+
+  // PWM mode OC1A: set duty cycle (OCR1A / OCR1C * 100)
+  OCR1A = map(analog_read_fanspeed, 0, 1023, OCR1C * lower_limit_percentage / 100, OCR1C);
+}
+
+void reset_running_time(){
+   if (vcc_mv > 4500){
+      // run longer when probably on usb power
+      fan_stop_time = millis() + 1000 * 600UL; 
+   } else {
+      fan_stop_time = millis() + 1000 * 300UL;
+   }  
 }
 
 void loop() {
-  // like delay(), millis() also doesn't seem to work anymore, use a counter instead
-  static uint16_t counter;
-
   if (button_press_temp){
       button_press_temp = 0;
-      _delay_ms(40); // primitive debounce
+      delay(40); // primitive debounce
 
-      // reset the counter
-      counter = 0;
+      reset_running_time();
   }
   
   if (!fan_running){
-     if (start_fan()){
-        counter = 0;
-     } else {
+     if (!start_fan()){
         // couldn't start
         go_to_sleep_forever();
         return;
      }  
   }
 
-  counter++; // the counter increases about 6.25 times per second when the fan runs
-
-  if (counter > stop_motor_counter){
+  if (millis() >= fan_stop_time){
      stop_fan();
      return;
   }
 
   check_vcc();
-  if (vcc_mv <= 3000){
+  if (vcc_mv <= 2900){
      stop_fan();
      return;
   }
 
   set_fan_speed();
 
-  _delay_ms(100);
+  delay(200);
 }
