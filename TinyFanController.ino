@@ -186,7 +186,6 @@ bool stop_fan(){
 
    digitalWrite(pwm_output_pin, HIGH);
    fan_running = false;
-   delay(2);
    go_to_sleep_forever();
 }
 
