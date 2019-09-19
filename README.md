@@ -45,7 +45,7 @@ TCCR0B = TCCR0B & 0b11111000 | 0b001;
 
 ## Arbitrary PWM frequency using TIMER1
 
-In 3c958a0fc336c8cd7b6e249cedf1eaad32e0c821 I changed the 32 kHz TCR0B PWM to a custom PWM using TIMER1. In depth details can be found in chapter "12. 8-bit Timer/Counter1" of the ATTiny datasheet.
+In <a href="https://github.com/chocotov1/TinyFanController/commit/3c958a0fc336c8cd7b6e249cedf1eaad32e0c821">3c958a0fc336c8cd7b6e249cedf1eaad32e0c821</a> I changed the 32 kHz TCR0B PWM to a custom PWM using TIMER1. In depth details can be found in chapter "12. 8-bit Timer/Counter1" of the ATTiny datasheet.
 
 The following lines set up a 25 kHz PWM signal with 50% duty cycle on the physical pin 7 (OC1A). The system clock is 1 MHz.
 
