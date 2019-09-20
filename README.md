@@ -32,7 +32,7 @@ The first attempt with a PWM signal from the ATtiny produced an audible whine. T
 
 <img src="https://raw.githubusercontent.com/chocotov1/TinyFanController/master/media/TinyFanController_scope_500hz.jpg" width=640>
 
-## 32 kHz PWM with TCR0B 
+## 32 kHz PWM with TCCR0B 
 
 Setting TCCR0B the following way resulted into a 32 kHz PWM frequency. The whine was gone. This came at the expense of not being able to use delay() and millis() anymore. \_delay_ms() of <util/delay.h> can be used instead but has limitations. To get 32 kHz the system clock must be 8 MHz. At 1 MHz the PWM signal would be 4 kHz.
 
@@ -40,12 +40,12 @@ Setting TCCR0B the following way resulted into a 32 kHz PWM frequency. The whine
 TCCR0B = TCCR0B & 0b11111000 | 0b001;
 ```
 
-<img src="https://raw.githubusercontent.com/chocotov1/TinyFanController/master/media/TinyFanController_scope_32khz_TCR0B.jpg" width=640>
+<img src="https://raw.githubusercontent.com/chocotov1/TinyFanController/master/media/TinyFanController_scope_32khz_TCCR0B.jpg" width=640>
 
 
 ## Arbitrary PWM frequency using TIMER1
 
-In <a href="https://github.com/chocotov1/TinyFanController/commit/3c958a0fc336c8cd7b6e249cedf1eaad32e0c821">3c958a0fc336c8cd7b6e249cedf1eaad32e0c821</a> I changed the 32 kHz TCR0B PWM to a custom PWM using TIMER1. In depth details can be found in chapter "12. 8-bit Timer/Counter1" of the ATTiny datasheet.
+In <a href="https://github.com/chocotov1/TinyFanController/commit/3c958a0fc336c8cd7b6e249cedf1eaad32e0c821">3c958a0fc336c8cd7b6e249cedf1eaad32e0c821</a> I changed the 32 kHz TCCR0B PWM to a custom PWM using TIMER1. In depth details can be found in chapter "12. 8-bit Timer/Counter1" of the ATTiny datasheet.
 
 The following lines set up a 25 kHz PWM signal with 50% duty cycle on the physical pin 7 (OC1A). The system clock is 1 MHz.
 
